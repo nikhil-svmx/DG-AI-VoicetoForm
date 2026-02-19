@@ -60,7 +60,7 @@ For the LOTO procedure, lets go with source`;
 // Conditions in the room were pretty normal… around 24 degrees temperature and about 49% humidity.
 // And yeah, this one's also certified by Gopal M, same date as the other one — 26th of January, 2026`;
 
-export const eightInst = `Taking about NeoLab Instruments of account number AC-09127 contract number CN-4478. The certifying part is PN-X540 with instrument SN-H635F-09.Asset tag is AT-22317.
+export const eightInst = `Talking about NeoLab Instruments of account number AC-09127 contract number CN-4478. The certifying part is PN-X540 with instrument SN-H635F-09.Asset tag is AT-22317.
 Select Within Tolerance but Limited as received condition since it passed but was close to the limit on one parameter.
 Chemical standards used are STD-CuSO4-01, STD-NaCl-03. Equipment used for test is TE-U564G for verification and TE-M9213 for secondary cross-check.
 The temperature is 23.4°C and humidity 46%. Certified by Field Technician Gopal M on 2026-01-26 . 

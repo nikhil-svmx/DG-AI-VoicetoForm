@@ -1,11 +1,9 @@
 import 'dotenv/config';
 import fetch from 'node-fetch';
-import { buildCatalog } from '../test/buildCatalog.js';
-import { ConditionRunner } from 'survey-core';
+
 import { first, eighth, second, third, fourth, fifth, sixth, seventh, ninth} from './testForms.js';
 import { eightInst, firstInst, secondInst, fourthInst,thirdInst, fifthInst } from './instructions.js';
 import { performance } from 'node:perf_hooks';
-import { technicionForm } from './forms.js';
  
  
 function timer(label) {
@@ -17,7 +15,6 @@ function timer(label) {
   };
 }
 
- 
 function extractFirstJsonObject(text) {
   if (typeof text !== 'string') return null;
   const start = text.indexOf('{');
@@ -39,10 +36,12 @@ function extractFirstJsonObject(text) {
  
  
 async function callOpenAI({ system, user, temperature = 0 }) {
+  console.log("In call");
   const apiKey = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_MODEL || 'gpt-4o';
  
   const stopApi = timer('OpenAI API round-trip');
+  console.log("OPEN AI API Present? "+ !!apiKey);
  
   const res = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
@@ -72,7 +71,7 @@ async function callOpenAI({ system, user, temperature = 0 }) {
 }
  
 
-function buildAnalysisPrompt(catalog, instruction) {
+export function buildAnalysisPrompt(catalog, instruction) {
   return `
     You are PASS-1: CONFLICT DETECTION ENGINE.
     
@@ -93,16 +92,9 @@ function buildAnalysisPrompt(catalog, instruction) {
     3. The user does NOT clearly specify which field it belongs to anywhere in the whole instruction.
     4. Assigning the value to one would logically prevent assigning it to another.
 
-    
+    - All resembling fields are not conflicts every time.
     If the user clearly specifies the target field,
     then it is NOT a conflict — even if similar fields exist.
-
-    CONFLICT DOESNOT EXIST IF:
-    - All resembling fields are not conflicts every time.
-    - The user mentioned that the value is same as another field by using *Same as that _field* , *Same*, *Refer to that _field* etc. 
-    so in that cases the user is clearly instructing the correct mapping. 
-    So, it will not be a conflict.
-
     
     DO NOT:
     - Compare field names in isolation.
@@ -150,7 +142,7 @@ function buildAnalysisPrompt(catalog, instruction) {
     AND user did not clearly scope it → mark as conflict.
 
     STEP 4:
-    Output only the fields that satisfy sonflicting rules in the format specified below.
+    Output only the fields that satisfy conflicting rules in the format specified below.
 
     ----------------------------------------
     OUTPUT FORMAT (JSON ONLY)
@@ -194,36 +186,6 @@ function buildAnalysisPrompt(catalog, instruction) {
       - NEVER invent keys, fields, or structure.
       - Omit any field that is not explicitly mentioned or confidently inferable.
       - Omit the keys if the name is present in final conflicting array.
-
-      =========================
-      CONFLICT RESOLVER
-      =========================
-      - For each conflict, observe the reason mentioned and try to validate if it is correct with respect to the user instruction or not.
-      - User may mention *Same as that _field* , *Same*, *Refer to that _field* so in that cases the user is clearly instructing the correct mapping. So, it will not be a conflict.
-      - Conflict is true only if :
-          * The value is mentioned but not the correct field in any way is not mentioned in the instruction.
-          * It is decided only after carefully analyzing the human instruction.
-          * Example: If json is having two fields : Guass Pressure and Normal Pressure and user mentioned thet "Pressure is 40" then it is a conflict because we donot know if the user is mentioning about the guass pressure or the normal pressure.
-      - From the analysis, identify if the conflict is really valid or not by carefully looking into the user instruction.
-      - If not valid, remove it from conflic array and map the field with the value.
-      
-      ========================
-      OUTPUT MODES
-      ========================
-      Return exactly ONE JSON object with:
-      {
-        "answers": { ...SurveyJS-compatible partial answers... },
-        "conflicts": [    {
-            "<value_identifier>": {
-              "value": "<literal value>",
-              "candidates": [
-                { "name": "<question.name>", "title": "<question.title>" }
-              ],
-              "reason": "<clear explanation>"
-            }
-          }]
-      }
-
 
       OUTPUT RULES
       1. Output **ONLY ONE valid JSON object**.
@@ -294,19 +256,7 @@ function buildAnalysisPrompt(catalog, instruction) {
       - NEVER use "first match wins".
       - NEVER silently resolve ambiguity.
       - NEVER downgrade a conflict into an answer.
-      
-      ========================
-      FINAL SELF-CHECK (MANDATORY)
-      ========================
-      Before producing output:
-      - If ANY value is assigned to a field AND
-        another catalog field exists with the same base concept
-        and the same units AND
-        the user did not explicitly specify the subtype,
-      THEN THIS IS A BUG:
-      - Remove the assignment
-      - Emit a conflict instead
-      
+
       ========================
       CATALOG (SOURCE OF TRUTH)
       ========================
@@ -326,17 +276,19 @@ function buildAnalysisPrompt(catalog, instruction) {
   }
  
  
-async function main() {
+export async function runner() {
   const stopTotal = timer('Total pipeline time');
- 
+
   const surveyJSON = second;
   const instruction = secondInst;
 
+  console.log("Before call");
   const analysis = await callOpenAI({
     system: buildAnalysisPrompt(surveyJSON, instruction),
     user: instruction,
     temperature: 0
   });
+  console.log("Outside call");
  
   console.log('\nPASS 1 ANALYSIS:\n', JSON.stringify(analysis, null, 2));
  
@@ -351,6 +303,5 @@ async function main() {
  
   stopTotal();
 }
- 
-main().catch(console.error);
- 
+
+runner();
