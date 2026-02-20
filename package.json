@@ -1,6 +1,8 @@
 {
   "name": "learn",
   "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=18" },
   "private": true,
   "dependencies": {
     "@salesforce-ux/design-system": "^2.25.0-alpha.2",
