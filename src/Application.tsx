@@ -54,7 +54,7 @@ export default function SurveyComponent() {
       setLoading(true);
 
       // Analyze here
-      const res = await fetch("http://localhost:3001/generate/analyze", {
+      const res = await fetch("/api/generate/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ instruction })
@@ -102,7 +102,7 @@ export default function SurveyComponent() {
   const generateWithResolutions = async (payload: Array<{ valueId: string; name: string; value: any }>) => {
     try {
       setLoading(true);
-      const res = await fetch("http://localhost:3001/generate", {
+      const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ instruction, resolutions: payload })
