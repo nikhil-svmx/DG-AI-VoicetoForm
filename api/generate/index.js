@@ -1,5 +1,4 @@
-import "dotenv/config";
-import { runner } from "../../src/server/localRunner.js"; // adjust relative path
+import { runner } from "../../src/server/localRunner.js";
 import { second as surveyJSON } from "../../src/configs/testForms.js";
 
 export default async function handler(req, res) {
@@ -8,11 +7,15 @@ export default async function handler(req, res) {
     const { instruction, resolutions } = req.body || {};
     if (!instruction?.trim()) return res.status(400).json({ error: "instruction required" });
 
-    const result = await runner(instruction, surveyJSON, Array.isArray(resolutions) ? resolutions : []);
-    // result should be { answers, conflicts? }
-    res.status(200).json(result);
+    const result = await runner(
+      instruction,
+      surveyJSON,
+      Array.isArray(resolutions) ? resolutions : []
+    ); 
+
+    return res.status(200).json(result);
   } catch (err) {
     console.error("Generation failed:", err);
-    res.status(500).json({ error: "Generation failed" });
+    return res.status(500).json({ error: "Generation failed" });
   }
 }

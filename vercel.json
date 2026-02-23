@@ -1,11 +1,10 @@
 {
   "functions": {
-    "api/*.js": {
-      "maxDuration": 60
-    }
+    "api/*.js": { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/generate", "destination": "/api/generate" },
-    { "source": "/generate/analyze", "destination": "/api/generate/analyze" }
+    { "source": "/generate/analyze", "destination": "/api/generate/analyze" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
