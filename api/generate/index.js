@@ -1,21 +1,25 @@
+import "dotenv/config";
 import { runner } from "../../src/server/localRunner.js";
-import { second as surveyJSON } from "../../src/configs/testForms.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
   try {
-    const { instruction, resolutions } = req.body || {};
+    const { instruction, resolutions, surveyJson } = req.body || {};
+
+    if (!surveyJson) return res.status(400).json({ error: "surveyJson required" });
     if (!instruction?.trim()) return res.status(400).json({ error: "instruction required" });
 
     const result = await runner(
       instruction,
-      surveyJSON,
+      surveyJson,
       Array.isArray(resolutions) ? resolutions : []
-    ); 
+    );
 
-    return res.status(200).json(result);
+    res.status(200).json(result);
   } catch (err) {
     console.error("Generation failed:", err);
-    return res.status(500).json({ error: "Generation failed" });
+    res.status(500).json({ error: "Generation failed" });
   }
 }
+``

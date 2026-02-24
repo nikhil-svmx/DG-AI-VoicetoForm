@@ -1,12 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import "survey-core/survey-core.css";
+import { useEffect, useState } from "react";
 import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
-import { second as surveyJson } from "./configs/testForms";
-
-const preloadAnswers: Record<string, any> = {};
+import "survey-core/survey-core.css";
 
 type Conflict = {
   value: any;
@@ -15,136 +12,175 @@ type Conflict = {
   candidates: { name: string; title: string }[];
 };
 
-export default function SurveyComponent() {
-  const [isCompleted, setIsCompleted] = useState<boolean>(false);
-  const [results, setResults] = useState<any>(null);
+export default function Application() {
+
+  const [uploadedJson, setUploadedJson] = useState<any | null>(null);
+  const [pastedJson, setPastedJson] = useState("");
+  const [surveyJson, setSurveyJson] = useState<any | null>(null);
+  const [survey, setSurvey] = useState<Model | null>(null);
+
+
   const [instruction, setInstruction] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // conflicts returned by /generate/analyze
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [results, setResults] = useState<any>(null);
+
   const [conflicts, setConflicts] = useState<Record<string, Conflict>>({});
   const [showModal, setShowModal] = useState(false);
-
-  // user selections: valueId -> chosen field name
   const [resolutions, setResolutions] = useState<Record<string, string>>({});
 
-  const survey = useMemo(() => new Model(surveyJson), []);
 
-  useEffect(() => {
-    const handleComplete = (sender: Model) => {
-      setResults(sender.data);
-      setIsCompleted(true);
-    };
+  const parseJsonSafely = (text: string) => {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  };
 
-    survey.onComplete.add(handleComplete);
 
-    if (preloadAnswers && Object.keys(preloadAnswers).length > 0) {
-      survey.mergeData(preloadAnswers);
+  const loadSurvey = () => {
+    const candidate = uploadedJson ?? parseJsonSafely(pastedJson);
+    if (!candidate) {
+      alert("Invalid JSON. Please upload or paste valid JSON.");
+      return;
     }
 
-    return () => {
-      survey.onComplete.remove(handleComplete);
+    try {
+      const model = new Model(candidate);
+      setSurvey(model);
+      setSurveyJson(candidate);
+      alert("Survey loaded!");
+    } catch (err) {
+      console.error(err);
+      alert("Survey JSON structure invalid for SurveyJS.");
+    }
+  };
+
+  const handleFileUpload: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = String(ev.target?.result);
+      const json = parseJsonSafely(text);
+      if (!json) {
+        alert("Invalid JSON");
+        return;
+      }
+      setUploadedJson(json);
+      setPastedJson(JSON.stringify(json, null, 2));
+      alert("File loaded. Click 'Load Survey'.");
     };
+    reader.readAsText(f);
+  };
+
+
+  useEffect(() => {
+    if (!survey) return;
+
+    const onComplete = (sender: Model) => {
+      setIsCompleted(true);
+      setResults(sender.data);
+    };
+
+    survey.onComplete.add(onComplete);
+    return () => survey.onComplete.remove(onComplete);
   }, [survey]);
 
+  // -------------------------
+  // 5️⃣ Analyze → maybe Conflicts
+  // -------------------------
   const handleInstructionSubmit = async () => {
     if (!instruction.trim()) return;
+    if (!surveyJson) return alert("Survey not loaded.");
 
     try {
       setLoading(true);
-
-      // Analyze here
       const res = await fetch("/api/generate/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction })
+        body: JSON.stringify({
+          instruction,
+          surveyJson
+        })
       });
-      
+
       if (!res.ok) throw new Error("Analyze failed");
 
       const { conflicts: found } = await res.json();
-      const hasConflicts = found && Object.keys(found).length > 0;
-
-      if (hasConflicts) {
+      if (found && Object.keys(found).length > 0) {
         setConflicts(found);
-        // Initialize default selections (none chosen yet)
-        const initial: Record<string, string> = {};
-        setResolutions(initial);
+        setResolutions({});
         setShowModal(true);
-        return; // wait for user to resolve
+        return;
       }
 
-      // No conflicts → directly generate final answers (with empty resolutions)
       await generateWithResolutions([]);
     } catch (err) {
-      console.error("Error during analyze", err);
-      alert("Analyze failed. Check server logs.");
+      console.error(err);
+      alert("Analyze failed.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Called after modal Save
+
   const onSaveResolutions = async () => {
-    // Build payload: array of { valueId, name, value }
-    const payload = Object.entries(resolutions)
-      .filter(([valueId, name]) => !!name && conflicts[valueId])
-      .map(([valueId, name]) => ({
-        valueId,
-        name,
-        value: conflicts[valueId].value
-      }));
+    const payload = Object.entries(resolutions).map(([valueId, name]) => ({
+      valueId,
+      name,
+      value: conflicts[valueId].value
+    }));
 
     setShowModal(false);
     await generateWithResolutions(payload);
   };
 
-  const generateWithResolutions = async (payload: Array<{ valueId: string; name: string; value: any }>) => {
+  const generateWithResolutions = async (payload: any[]) => {
+    if (!surveyJson) return alert("Survey not loaded.");
+
     try {
       setLoading(true);
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instruction, resolutions: payload })
+        body: JSON.stringify({
+          instruction,
+          resolutions: payload,
+          surveyJson
+        })
       });
 
       if (!res.ok) throw new Error("Generation failed");
-
       const { answers } = await res.json();
-
-      // Merge generated answers into current survey data
-      survey.mergeData(answers);
+      survey?.mergeData(answers);
     } catch (err) {
-      console.error("Error generating answers", err);
-      alert("Failed to generate answers. Check server logs.");
+      console.error(err);
+      alert("Generation failed.");
     } finally {
       setLoading(false);
     }
   };
 
+
   const renderResultsTable = () => {
     if (!results) return null;
-
     return (
-      <table
-        style={{
-          borderCollapse: "collapse",
-          width: "100%",
-          background: "#fff",
-          border: "1px solid #ccc"
-        }}
-      >
+      <table style={{ borderCollapse: "collapse", width: "100%", marginTop: 20 }}>
         <thead>
           <tr style={{ background: "#ec47ce" }}>
-            <th style={{ border: "1px solid #b0bced", padding: "8px" }}>Question</th>
-            <th style={{ border: "1px solid #b0bced", padding: "8px" }}>Response</th>
+            <th style={{ padding: 8, border: "1px solid #aaa" }}>Question</th>
+            <th style={{ padding: 8, border: "1px solid #aaa" }}>Response</th>
           </tr>
         </thead>
         <tbody>
           {Object.entries(results).map(([key, value]) => (
             <tr key={key}>
-              <td style={{ border: "1px solid #b0bced", padding: "8px" }}>{key}</td>
-              <td style={{ border: "1px solid #b0bced", padding: "8px" }}>
+              <td style={{ padding: 8, border: "1px solid #aaa" }}>{key}</td>
+              <td style={{ padding: 8, border: "1px solid #aaa" }}>
                 {Array.isArray(value) ? value.join(", ") : String(value)}
               </td>
             </tr>
@@ -156,8 +192,7 @@ export default function SurveyComponent() {
 
   const renderConflictModal = () => {
     if (!showModal) return null;
-
-    const valueIds = Object.keys(conflicts);
+    const ids = Object.keys(conflicts);
 
     return (
       <div
@@ -166,150 +201,109 @@ export default function SurveyComponent() {
           inset: 0,
           background: "rgba(0,0,0,0.45)",
           display: "flex",
-          alignItems: "center",
           justifyContent: "center",
+          alignItems: "center",
           zIndex: 9999
         }}
       >
-        <div
-          style={{
-            width: "800px",
-            maxHeight: "80vh",
-            overflow: "auto",
-            background: "#fff",
-            borderRadius: "8px",
-            boxShadow: "0 6px 20px rgba(0,0,0,0.2)",
-            padding: "20px"
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Resolve Conflicts</h2>
-          <p style={{ color: "#555", marginTop: 0 }}>
-            Choose the correct field for each value. Your selections will be locked and included in the final JSON.
-          </p>
+        <div style={{ background: "white", padding: 20, width: 700, borderRadius: 8 }}>
+          <h3>Resolve Conflicts</h3>
 
-          {valueIds.map((valueId) => {
-            const c = conflicts[valueId];
+          {ids.map((id) => {
+            const c = conflicts[id];
             return (
-              <div key={valueId} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: 12, marginBottom: 12 }}>
-                <div style={{ fontSize: 12, color: "#6b7280" }}>Value ID: {valueId}</div>
-                <div style={{ marginTop: 6 }}>
-                  <strong>Value:</strong> <code>{String(c.value)}</code>
-                </div>
-                {c.source && (
-                  <div style={{ marginTop: 6 }}>
-                    <strong>Sentence:</strong> <em>{c.source}</em>
-                  </div>
-                )}
-                <div style={{ marginTop: 6 }}>
-                  <strong>Reason:</strong> {c.reason}
-                </div>
-
+              <div key={id} style={{ border: "1px solid #ddd", padding: 10, marginBottom: 10 }}>
+                <div><b>Value:</b> {String(c.value)}</div>
+                <div><b>Reason:</b> {c.reason}</div>
                 <div style={{ marginTop: 10 }}>
-                  <strong>Choose target field:</strong>
-                  <div style={{ marginTop: 8 }}>
-                    {c.candidates.map((cand) => {
-                      const id = `${valueId}::${cand.name}`;
-                      return (
-                        <label key={id} style={{ display: "block", marginBottom: 6, cursor: "pointer" }}>
-                          <input
-                            type="radio"
-                            name={`cand-${valueId}`}
-                            value={cand.name}
-                            checked={resolutions[valueId] === cand.name}
-                            onChange={(e) =>
-                              setResolutions((prev) => ({ ...prev, [valueId]: e.target.value }))
-                            }
-                            style={{ marginRight: 8 }}
-                          />
-                          <span style={{ fontFamily: "monospace" }}>{cand.name}</span>
-                          {cand.title ? <span style={{ color: "#6b7280" }}> — {cand.title}</span> : null}
-                        </label>
-                      );
-                    })}
-                  </div>
+                  {c.candidates.map((cand) => (
+                    <label key={cand.name} style={{ display: "block" }}>
+                      <input
+                        type="radio"
+                        name={`cand-${id}`}
+                        value={cand.name}
+                        checked={resolutions[id] === cand.name}
+                        onChange={(e) =>
+                          setResolutions((prev) => ({ ...prev, [id]: e.target.value }))
+                        }
+                      />
+                      <span style={{ marginLeft: 8 }}>{cand.name} — {cand.title}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
             );
           })}
 
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-            <button
-              onClick={() => setShowModal(false)}
-              style={{
-                padding: "8px 14px",
-                background: "#e5e7eb",
-                border: "none",
-                borderRadius: 4,
-                cursor: "pointer"
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onSaveResolutions}
-              style={{
-                padding: "8px 14px",
-                background: "#4caf50",
-                color: "#fff",
-                border: "none",
-                borderRadius: 4,
-                cursor: "pointer"
-              }}
-            >
-              Save & Continue
-            </button>
-          </div>
+          <button onClick={() => setShowModal(false)} style={{ marginRight: 10 }}>
+            Cancel
+          </button>
+          <button onClick={onSaveResolutions} style={{ background: "green", color: "white" }}>
+            Save & Continue
+          </button>
         </div>
       </div>
     );
   };
 
+
   return (
-    <div style={{ maxWidth: "800px", margin: "auto", padding: "20px" }}>
-      {!isCompleted && (
-        <div style={{ marginBottom: "20px" }}>
-          <h3>Human Instruction</h3>
-          <textarea
-            rows={4}
-            style={{ width: "100%", padding: "8px" }}
-            value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
-            placeholder="Paste instruction here..."
-          />
+    <div style={{ width: "90%", maxWidth: 900, margin: "auto", padding: 20 }}>
+      
+      {!survey && (
+        <div style={{ border: "1px solid #ddd", padding: 16, borderRadius: 8 }}>
+          <h2>Load Survey JSON</h2>
+
+          <label>Upload JSON file:</label><br />
+          <input type="file" accept="application/json" onChange={handleFileUpload} />
+
+          <div style={{ marginTop: 16 }}>
+            <label>Or paste JSON:</label>
+            <textarea
+              rows={8}
+              style={{ width: "100%", fontFamily: "monospace", marginTop: 8 }}
+              value={pastedJson}
+              onChange={(e) => setPastedJson(e.target.value)}
+              placeholder="Paste your survey JSON here..."
+            />
+          </div>
+
           <button
-            onClick={handleInstructionSubmit}
-            disabled={loading}
-            style={{
-              marginTop: "10px",
-              padding: "8px 16px",
-              background: "#4caf50",
-              color: "#fff",
-              border: "none",
-              cursor: "pointer"
-            }}
+            style={{ marginTop: 16, padding: "8px 16px", background: "#4caf50", color: "white" }}
+            onClick={loadSurvey}
           >
-            {loading ? "Processing..." : "Submit Instruction"}
+            Load Survey
           </button>
         </div>
       )}
 
-      {!isCompleted ? (
-        <Survey model={survey} />
-      ) : (
-        <div>
-          <div
-            style={{
-              width: "100%",
-              margin: "5px 0",
-              backgroundColor: "#87cefa",
-              padding: "5px"
-            }}
-          >
-            <h2>Thank you for completing the Health Checkup Survey!</h2>
+      {survey && !isCompleted && (
+        <>
+          <div style={{ marginTop: 20 }}>
+            <h3>Human Instruction</h3>
+            <textarea
+              rows={4}
+              style={{ width: "100%", padding: 8 }}
+              placeholder="Enter instruction..."
+              value={instruction}
+              onChange={(e) => setInstruction(e.target.value)}
+            />
+            <button
+              onClick={handleInstructionSubmit}
+              disabled={loading}
+              style={{ marginTop: 10, padding: "8px 16px", background: "green", color: "white" }}
+            >
+              {loading ? "Processing..." : "Submit Instruction"}
+            </button>
           </div>
 
-          <br />
-          <h3>Your Responses:</h3>
+          <Survey model={survey} />
+        </>
+      )}
+
+      {survey && isCompleted && (
+        <div>
+          <h2>Survey Completed</h2>
           {renderResultsTable()}
         </div>
       )}
