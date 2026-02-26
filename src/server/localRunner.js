@@ -114,7 +114,7 @@ export function buildAnalysisPrompt(catalog, instruction) {
     2. Multiple catalog fields could accept that value type.
     3. The user does NOT clearly specify which field it belongs to anywhere in the whole instruction.
     4. Assigning the value to one would logically prevent assigning it to another.
-
+    5. If only one matching field exist, then it is not a conflict.
     
     TODAY: ${today}
     - Compute relative dates with respect to TODAY. Output in YYYY-MM-DD.
@@ -127,6 +127,7 @@ export function buildAnalysisPrompt(catalog, instruction) {
     - The user mentioned that the value is same as another field by using *Same as that _field* , *Same*, *Refer to that _field* etc. 
     so in that cases the user is clearly instructing the correct mapping. 
     So, it will not be a conflict.
+    - Only if one field is matching the value provided in user instruction.
 
     
     DO NOT:
