@@ -101,53 +101,30 @@ export function buildAnalysisPrompt(catalog, instruction) {
     Determine whether any VALUE provided in the user instruction
     could belong to multiple catalog fields without clear specification.
 
-    Human speaks in natural language. He may speak irrelevant things. Ignore them.
-    Understand and analyze whole instruction before marking any field as CONFLICT.
+    Understand and analyze whole instruction as human before marking any field as CONFLICT.
     Neglect unrelated instructions. Concentrate only if the context matches to the form provided by catelog.
     ----------------------------------------
     IMPORTANT: Conflict is VALUE-DRIVEN
     ----------------------------------------
     
-    Conflict exists ONLY if:
+    Conflict exists ONLY if all of the following conditions are true (AND Case):
     
     1. The user provides a specific value.
-    2. Multiple catalog fields could accept that value type.
-    3. The user does NOT clearly specify which field it belongs to anywhere in the whole instruction.
-    4. Assigning the value to one would logically prevent assigning it to another.
-    5. If only one matching field exist, then it is not a conflict.
-    
-    TODAY: ${today}
-    - Compute relative dates with respect to TODAY. Output in YYYY-MM-DD.
+    2. The user does NOT clearly specify which field it belongs to anywhere in the whole instruction.
+    3. Assigning the value to one would logically prevent assigning it to another. 
+    4. Mark conflicts ONLY when a concrete value competes across multiple fields at the same entity level without explicit user scoping.
 
-    If the user clearly specifies the target field,
-    then it is NOT a conflict — even if similar fields exist.
+    CONFLICT DOESNOT EXIST IF any one of the following conditions are true. (OR Case):
+    1. All resembling fields are not conflicts every time.
+    2. The user mentioned that the value is same as another field by using *Same as that _field* , *Same*, *Refer to that _field* etc. 
+    3. Only if one field is matching the value provided in user instruction.
+    4. If the user clearly specifies the target field, then it is NOT a conflict — even if similar fields exist.
+    5. Repeated groups with index patterns (e.g., name, name-2, name-3) are not conflicts; map in sequence, do not reorder.
 
-    CONFLICT DOESNOT EXIST IF:
-    - All resembling fields are not conflicts every time.
-    - The user mentioned that the value is same as another field by using *Same as that _field* , *Same*, *Refer to that _field* etc. 
-    so in that cases the user is clearly instructing the correct mapping. 
-    So, it will not be a conflict.
-    - Only if one field is matching the value provided in user instruction.
-
-    
     DO NOT:
     - Compare field names in isolation.
     - Mark conflict due to word similarity.
     - Assume conflict unless a VALUE is competing.
-
-    -------------------------------------------
-    Only mark conflict if multiple candidate fields belong to the same entity level and compete for the same value.
-    Before marking as conflicting understand the sentence mentioned clearly.
-
-    -------------------------------------------
-    REPEATED GROUP RULE (VERY IMPORTANT)
-    -------------------------------------------
-    If field names follow an indexed pattern (e.g., name, name-2, name-3):
-    
-    - These represent repeated entity groups.
-    - They are NOT conflicting fields.
-    - Values must be mapped in the order entities appear in the user instruction.
-    - DO NOT mark them as conflicting if mentioned sequentilly under same group after starting the instruction.
 
     -------------------------------------------
     - JSON KEYS always come from the survey JSON **question.name** in the same case. Donot change the case of the keys.
@@ -155,28 +132,12 @@ export function buildAnalysisPrompt(catalog, instruction) {
     - NEVER derive keys from user language.
     - NEVER derive values from survey labels or titles.
 
+    - Today's date is ${today}. If user instruction mentiones next friday or last wednesday or any other terms, compute them relative to TODAY'S DATE in YYYY-MM-DD format.
+        - Format is YYYY-MM-DD.
+
     If the user provides multiple values in one sentence:
     - Split and map them ONLY to matching catalog fields.
     - Try to understand the whole instruction and map the fields correctly.
-    ----------------------------------------
-    PROCESS:
-    ----------------------------------------
-    
-    STEP 1:
-    Extract explicit values from the instruction
-    (dates, phone numbers, emails, numeric values, identifiers, etc.)
-    
-    STEP 2:
-    For each extracted value:
-    Identify all catalog fields that could logically accept it
-    based on type and meaning.
-    
-    STEP 3:
-    If more than one candidate field exists
-    AND user did not clearly scope it → mark as conflict.
-
-    STEP 4:
-    Output only the fields that satisfy sonflicting rules in the format specified below.
 
     ----------------------------------------
     OUTPUT FORMAT (JSON ONLY)
@@ -223,7 +184,7 @@ function buildFinalPrompt(catalog, analysis, instruction, resolutions) {
     USER RESOLUTIONS (LOCKED)
     ========================
     The user has resolved some conflicts. For each entry below:
-    - Set the specified "name" to the provided "value" EXACTLY AS-IS.
+    - Set the specified "name" to the provided "value" EXACTLY AS-IS. If type is not compatible, follow TYPE RULES section and modify the type.
     - Do not alter, normalize, or remap these values.
     - Do not omit these keys as conflicts; they are resolved.
     - Do not assign these values to any other field.
@@ -247,10 +208,8 @@ function buildFinalPrompt(catalog, analysis, instruction, resolutions) {
       - radiogroup / dropdown:
         - Output the stored value (choices[].value) ONLY
       - boolean:
-        - Output true / false ONLY
-        - Infer strictly from language:
-          ("no", "not", "never" → false)
-          ("yes", "has", "was", "did" → true)
+        - Output true / false ONLY when the user explicitly answers the question
+          OR clearly describes behavior in the SAME scenario the question asks about.
       - text / comment:
         - Output ONLY the literal extracted value
         - Do NOT summarize or rephrase
@@ -280,7 +239,6 @@ function buildFinalPrompt(catalog, analysis, instruction, resolutions) {
   `;
 }
 
-// ---- Orchestration ----
 export async function runner(instruction, surveyJSON, resolutions = []) {
   const stopTotal = timer('Total pipeline time');
 
