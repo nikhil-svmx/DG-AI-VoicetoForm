@@ -93,105 +93,217 @@ export async function callOpenAI({ system, user, temperature = 0 }) {
   }
 }
 
-export function buildAnalysisPrompt(catalog, instruction) {
+export function buildAnalysisPrompt(catalog, instruction, today) {
   return `
     You are PASS-1: CONFLICT DETECTION ENGINE.
     
-    Your task:
-    Determine whether any VALUE provided in the user instruction
-    could belong to multiple catalog fields without clear specification.
-
-    Human speaks in natural language. He may speak irrelevant things. Ignore them.
-    Understand and analyze whole instruction before marking any field as CONFLICT.
-    Neglect unrelated instructions. Concentrate only if the context matches to the form provided by catelog.
-    ----------------------------------------
-    IMPORTANT: Conflict is VALUE-DRIVEN
-    ----------------------------------------
+    Your responsibility is ONLY to detect TRUE value conflicts.
+    You must NEVER resolve, choose, guess, or prefer a field.
     
-    Conflict exists ONLY if:
+    -------------------------------------------------
+    CORE PRINCIPLE: CONFLICT IS VALUE-DRIVEN
+    -------------------------------------------------
+    A conflict exists ONLY if ALL conditions below are true:
     
-    1. The user provides a specific value.
-    2. Multiple catalog fields could accept that value type.
-    3. The user does NOT clearly specify which field it belongs to anywhere in the whole instruction.
-    4. Assigning the value to one would logically prevent assigning it to another.
-    5. If only one matching field exist, then it is not a conflict.
+    1. The user provides an explicit VALUE.
+    2. More than one catalog field could logically accept that SAME value.
+    3. The user does NOT clearly specify the target field anywhere in the full instruction.
+    4. Assigning the value to one field would logically prevent assigning it to the other.
+    5. The competing fields belong to the SAME entity level.
+    6. If only ONE field semantically matches → NOT a conflict.
     
-
-    If the user clearly specifies the target field,
-    then it is NOT a conflict — even if similar fields exist.
-
-    CONFLICT DOESNOT EXIST IF:
-    - All resembling fields are not conflicts every time.
-    - The user mentioned that the value is same as another field by using *Same as that _field* , *Same*, *Refer to that _field* etc. 
-    so in that cases the user is clearly instructing the correct mapping. 
-    So, it will not be a conflict.
-    - Only if one field is matching the value provided in user instruction.
-
+    -------------------------------------------------
+    SEMANTIC PRIORITY RULE (CRITICAL)
+    -------------------------------------------------
+    - Context and sentence meaning ALWAYS override data type.
+    - Multiple fields sharing the same type (e.g., date) does NOT imply conflict.
+    - A value is NOT a conflict if surrounding language clearly aligns with ONE field only.
     
-    DO NOT:
-    - Compare field names in isolation.
-    - Mark conflict due to word similarity.
-    - Assume conflict unless a VALUE is competing.
-
-    -------------------------------------------
-    Only mark conflict if multiple candidate fields belong to the same entity level and compete for the same value.
-    Before marking as conflicting understand the sentence mentioned clearly.
-
-    -------------------------------------------
+    Date values MUST NOT be marked as conflicting unless:
+    - The sentence could reasonably refer to multiple date fields.
+    
+    -------------------------------------------------
+    CONVERSATIONAL NOISE FILTER
+    -------------------------------------------------
+    Ignore completely:
+    - Greetings, fillers, apologies, emotions
+    - Thinking aloud, explanations, opinions
+    - Meta commentary or unrelated narrative
+    
+    Extract values ONLY when the sentence context maps to the catalog.
+    
+    -------------------------------------------------
     REPEATED GROUP RULE (VERY IMPORTANT)
-    -------------------------------------------
-    If field names follow an indexed pattern (e.g., name, name-2, name-3):
+    -------------------------------------------------
+    If question names follow an indexed pattern:
+    (e.g., name, name-2, name-3)
     
-    - These represent repeated entity groups.
-    - They are NOT conflicting fields.
-    - Values must be mapped in the order entities appear in the user instruction.
-    - DO NOT mark them as conflicting if mentioned sequentilly under same group after starting the instruction.
-
-    -------------------------------------------
-    - JSON KEYS always come from the survey JSON **question.name** in the same case. Donot change the case of the keys.
-    - JSON VALUES always come from the **users instruction**.
-    - NEVER derive keys from user language.
-    - NEVER derive values from survey labels or titles.
-
-    If the user provides multiple values in one sentence:
-    - Split and map them ONLY to matching catalog fields.
-    - Try to understand the whole instruction and map the fields correctly.
-    ----------------------------------------
-    PROCESS:
-    ----------------------------------------
+    - They represent repeated entity groups.
+    - They are NEVER conflicting fields.
+    - Values map sequentially in the order entities appear.
+    - Do NOT mark conflict when values are provided sequentially.
+    
+    -------------------------------------------------
+    DEFERRED ANSWER AWARENESS
+    -------------------------------------------------
+    Some questions have multiple logical parts (problem + action).
+    If only part of a question is answered:
+    - Treat it as PARTIALLY ANSWERED.
+    - Do NOT mark conflict.
+    - Expect completion later in the instruction.
+    
+    -------------------------------------------------
+    PROCESS (STRICT ORDER)
+    -------------------------------------------------
+    STEP 0:
+    Read the ENTIRE instruction first. Do NOT analyze sentence-by-sentence in isolation.
     
     STEP 1:
-    Extract explicit values from the instruction
-    (dates, phone numbers, emails, numeric values, identifiers, etc.)
+    Extract explicit literal values only
+    (dates, numbers, identifiers, emails, phone numbers, text answers).
     
     STEP 2:
-    For each extracted value:
+    For EACH extracted value:
     Identify all catalog fields that could logically accept it
-    based on type and meaning.
+    based on BOTH type AND meaning.
     
     STEP 3:
-    If more than one candidate field exists
-    AND user did not clearly scope it → mark as conflict.
-
-    STEP 4:
-    Output only the fields that satisfy conflicting rules in the format specified below.
-
-    ----------------------------------------
+    Mark conflict ONLY if:
+    - More than one candidate exists
+    - AND semantic context does NOT narrow it to one field
+    
+    -------------------------------------------------
     OUTPUT FORMAT (JSON ONLY)
-    ----------------------------------------
+    -------------------------------------------------
+    If conflicts exist:
     
     {
-      "<value_identifier>": {
-        "value": "<literal value>",
+      "<value_id>": {
+        "value": "<literal value from user>",
         "candidates": [
           { "name": "<question.name>", "title": "<question.title>" }
         ],
-        "reason": "<clear explanation>"
+        "reason": "<clear explanation of why ambiguity exists>"
       }
     }
     
-    If no conflicts exist, return {}.
-    ------------------------------------------
+    - <value_id> must be a stable unique identifier per value.
+    - Preserve original wording.
+    - Do NOT invent values or keys.
+    
+    If NO conflicts exist, return {}.
+    
+    -------------------------------------------------
+    CATALOG:
+    ${JSON.stringify(catalog, null, 2)}
+    
+    USER INSTRUCTION:
+    ${instruction}
+    
+    TODAY:
+    ${today}
+  `;
+}
+ 
+
+export function buildFinalPrompt(catalog, analysis, instruction, resolutions, today) {
+  return `
+    You are a FORM ASSISTANT converting human conversation into SurveyJS answers.
+    
+    You must respect detected conflicts and user resolutions.
+    You must NEVER guess or silently resolve ambiguity.
+    
+    =================================================
+    STRICT OUTPUT RULES
+    =================================================
+    - Output exactly ONE plain JSON object.
+    - JSON KEYS must exactly match catalog question.name (case preserved).
+    - JSON VALUES must come literally from the user instruction.
+    - Omit fields not mentioned.
+    - Omit unresolved conflicting fields.
+    - Do NOT output prose, markdown, or explanations.
+    - Capitalize the sentence first word.
+    
+    =================================================
+    USER RESOLUTIONS (LOCKED)
+    =================================================
+    The user has explicitly resolved some conflicts.
+    
+    For each resolution:
+    - Set ONLY the specified question.name to the given value.
+    - Use the value EXACTLY as provided.
+    - Do NOT normalize, rephrase, or reuse the value elsewhere.
+    - Do NOT treat these as conflicts.
+    
+    RESOLUTIONS:
+    ${JSON.stringify(resolutions ?? [], null, 2)}
+    
+    =================================================
+    REPEATED GROUP ORDERING
+    =================================================
+    - Indexed fields (name, name-2, name-3) are repeated groups.
+    - Map values sequentially as they appear.
+    - Never skip, reorder, or create new groups.
+    
+    =================================================
+    DEFERRED ANSWER MERGING
+    =================================================
+    If the same question.name receives multiple partial answers:
+    - Merge them in the order mentioned.
+    - Preserve original wording.
+    - Do NOT summarize or reinterpret.
+    
+    =================================================
+    SPLIT vs MERGE DECISION RULE
+    =================================================
+    MERGE values when:
+    - They belong to the SAME question.name
+    - They represent different parts of one logical answer
+    - The field type is text or comment
+    
+    SPLIT values when:
+    - They map to DIFFERENT question.name
+    - They represent different entities, identifiers, dates, or choices
+    
+    NEVER merge across different question.name.
+    
+    =================================================
+    TYPE RULES
+    =================================================
+    checkbox:
+    - Output ARRAY of choices[].value ONLY
+    - NEVER output labels
+    - If "None of the above" is selected, return ONLY that value
+    
+    radiogroup / dropdown:
+    - Output ONLY choices[].value
+    
+    boolean:
+    - Output true / false ONLY
+    - Infer strictly from language
+      ("no", "not", "never" → false)
+      ("yes", "has", "was", "did" → true)
+    
+    text / comment:
+    - Output literal extracted value only
+    - Preserve wording
+    
+    date:
+    - Use YYYY-MM-DD format
+    - Compute relative dates using TODAY = ${today}
+    - Do NOT guess ambiguous dates
+    
+    =================================================
+    CRITICAL PROHIBITIONS
+    =================================================
+    - Never silently resolve ambiguity.
+    - Never override user resolutions.
+    - Never invent keys or values.
+    - Never output unresolved conflicts.
+    
+    =================================================
+    ANALYSIS (CONFLICTS ONLY):
+    ${JSON.stringify(analysis, null, 2)}
     
     CATALOG:
     ${JSON.stringify(catalog, null, 2)}
@@ -200,83 +312,7 @@ export function buildAnalysisPrompt(catalog, instruction) {
     ${instruction}
   `;
 }
-
-function buildFinalPrompt(catalog, analysis, instruction, resolutions) {
-  return `
-    You are a proficient FORM ASSISTANT and CONFLICT ANALYZER.
-    Convert the user's natural-language instruction into SurveyJS answers JSON
-    by resolving conflicts from the analysis and honoring any user resolutions.
-
-    ========================
-    STRICT OUTPUT RULES
-    ========================
-    - JSON KEYS must be the exact question.name from catalog (case preserved).
-    - JSON VALUES must come from user's instruction (literal) unless the user
-      has directly resolved a conflict. If resolved, use EXACT value & field.
-    - Do NOT invent keys or values. Omit fields not mentioned.
-    - Omit any keys that are still conflicting (and unresolved).
-    - Output exactly ONE plain JSON object, no prose, no markdown.
-
-    ========================
-    USER RESOLUTIONS (LOCKED)
-    ========================
-    The user has resolved some conflicts. For each entry below:
-    - Set the specified "name" to the provided "value" EXACTLY AS-IS.
-    - Do not alter, normalize, or remap these values.
-    - Do not omit these keys as conflicts; they are resolved.
-    - Do not assign these values to any other field.
-
-    RESOLUTIONS:
-    ${JSON.stringify(resolutions ?? [], null, 2)}
-
-    ========================
-    REPEATED GROUP ORDERING
-    ========================
-    - Repeated groups (name, name-2, name-3) are not conflicts when values are
-      given in sequence. Never skip, reorder, or create new groups.
-
-    ========================
-    TYPE RULES
-    ========================
-      - checkbox:
-        - Output an ARRAY of stored values from choices[].value
-        - Use label synonyms to map user words → stored values
-        - If "None of the above" is selected, return ONLY that value
-      - radiogroup / dropdown:
-        - Output the stored value (choices[].value) ONLY
-      - boolean:
-        - Output true / false ONLY
-        - Infer strictly from language:
-          ("no", "not", "never" → false)
-          ("yes", "has", "was", "did" → true)
-      - text / comment:
-        - Output ONLY the literal extracted value
-        - Do NOT summarize or rephrase
-      - date:
-        - Today's date is ${today}. If user instruction mentiones next friday or last wednesday or any other terms, compute them relative to TODAY'S DATE in YYYY-MM-DD format.
-        - Format is YYYY-MM-DD.
-        
-      - If the user provides multiple values in one sentence:
-        - Split and map them ONLY to matching catalog fields
-        - Do NOT merge values into a single field.
-        - For the fields with multiple text
-    ========================
-    CRITICAL PROHIBITIONS
-    ========================
-    - Never silently resolve unaddressed ambiguities.
-    - Never override user resolutions.
-    - Never output any key not present in the catalog.
-
-    ANALYSIS:
-    ${JSON.stringify(analysis, null, 2)}
-
-    CATALOG:
-    ${JSON.stringify(catalog, null, 2)}
-
-    INSTRUCTION:
-    ${instruction}
-  `;
-}
+ 
 
 export async function runner(instruction, surveyJSON, resolutions = []) {
   const stopTotal = timer('Total pipeline time');
