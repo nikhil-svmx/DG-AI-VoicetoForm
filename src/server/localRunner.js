@@ -129,7 +129,7 @@ export function buildFinalPrompt(catalog, analysis, instruction, resolutions, to
 }
  
 
-export async function runner(instruction, surveyJSON, analysis, resolutions = []) {
+export async function runner(instruction, surveyJSON, analysis, resolutions = [], today, pass2prompt) {
   const stopTotal = timer('Total pipeline time');
 
   const finalResult = await callOpenAI({
