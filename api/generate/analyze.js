@@ -2,10 +2,9 @@ import "dotenv/config";
 import { buildAnalysisPrompt, callOpenAI } from "../../src/server/localRunner.js";
 import { todayIST } from "../../src/server/localRunner.js";
 
-const today = todayIST();
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-
+  const today = todayIST();
   try {
     const { instruction, surveyJson, pass1Prompt } = req.body || {};
 
@@ -19,6 +18,7 @@ export default async function handler(req, res) {
     });
 
     res.status(200).json({ conflicts: analysis || {} });
+    console.log(analysis);
   } catch (err) {
     console.error("Analyze failed:", err);
     res.status(500).json({ error: "Analyze failed" });
