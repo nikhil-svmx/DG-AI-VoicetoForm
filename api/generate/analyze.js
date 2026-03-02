@@ -1,17 +1,19 @@
 import "dotenv/config";
 import { buildAnalysisPrompt, callOpenAI } from "../../src/server/localRunner.js";
+import { todayIST } from "../../src/server/localRunner.js";
 
+const today = todayIST();
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { instruction, surveyJson } = req.body || {};
+    const { instruction, surveyJson, pass1Prompt } = req.body || {};
 
     if (!surveyJson) return res.status(400).json({ error: "surveyJson required" });
     if (!instruction?.trim()) return res.status(400).json({ error: "instruction required" });
 
     const analysis = await callOpenAI({
-      system: buildAnalysisPrompt(surveyJson, instruction),
+      system: buildAnalysisPrompt(surveyJson, instruction, today, pass1Prompt),
       user: instruction,
       temperature: 0
     });

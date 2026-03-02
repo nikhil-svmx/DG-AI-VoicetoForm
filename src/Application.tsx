@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
 import "survey-core/survey-core.css";
+import { buildAnalysisPrompt } from "./configs/simplifiedDualPass";
+import { buildFinalPrompt } from "./server/localRunner";
+import { PROPMT_TEMPLATE_ANALYSIS, PROPMT_TEMPLATE_FINAL } from "./server/prompts";
 
 type Conflict = {
   value: any;
@@ -30,6 +33,8 @@ export default function Application() {
   const [showModal, setShowModal] = useState(false);
   const [resolutions, setResolutions] = useState<Record<string, string>>({});
 
+  const [pass1Prompt, setPass1propmt] = useState<string>(PROPMT_TEMPLATE_ANALYSIS);
+  const [pass2Prompt, setPass2propmt] = useState<string>(PROPMT_TEMPLATE_FINAL);
 
   const parseJsonSafely = (text: string) => {
     try {
@@ -90,9 +95,7 @@ export default function Application() {
     return () => survey.onComplete.remove(onComplete);
   }, [survey]);
 
-  // -------------------------
-  // 5️⃣ Analyze → maybe Conflicts
-  // -------------------------
+
   const handleInstructionSubmit = async () => {
     if (!instruction.trim()) return;
     if (!surveyJson) return alert("Survey not loaded.");
@@ -104,7 +107,8 @@ export default function Application() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           instruction,
-          surveyJson
+          surveyJson,
+          pass1Prompt
         })
       });
 
@@ -150,7 +154,9 @@ export default function Application() {
         body: JSON.stringify({
           instruction,
           resolutions: payload,
-          surveyJson
+          surveyJson,
+          conflicts,
+          pass2Prompt
         })
       });
 
@@ -280,6 +286,20 @@ export default function Application() {
       {survey && !isCompleted && (
         <>
           <div style={{ marginTop: 20 }}>
+            <h3>Conflict Identification Prompt</h3>
+            <textarea
+              rows={6}
+              style={{ width: "100%", padding: 8 }}
+              value={pass1Prompt}
+              onChange={(e) => setPass1propmt(e.target.value)}
+            />
+            <h3>Human Instruction</h3>
+            <textarea
+              rows={4}
+              style={{ width: "100%", padding: 8 }}
+              value={pass2Prompt}
+              onChange={(e) => setPass2propmt(e.target.value)}
+            />
             <h3>Human Instruction</h3>
             <textarea
               rows={4}
