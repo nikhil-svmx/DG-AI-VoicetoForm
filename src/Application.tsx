@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
 import "survey-core/survey-core.css";
-import { buildAnalysisPrompt } from "./configs/simplifiedDualPass";
-import { buildFinalPrompt } from "./server/localRunner";
 import { PROPMT_TEMPLATE_ANALYSIS, PROPMT_TEMPLATE_FINAL } from "./server/prompts";
 
 type Conflict = {
