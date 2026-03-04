@@ -292,14 +292,14 @@ export default function Application() {
               value={pass1Prompt}
               onChange={(e) => setPass1propmt(e.target.value)}
             />
-            <h3>Human Instruction</h3>
+            <h3>Final JSON Prompt</h3>
             <textarea
               rows={4}
               style={{ width: "100%", padding: 8 }}
               value={pass2Prompt}
               onChange={(e) => setPass2propmt(e.target.value)}
             />
-            <h3>Final JSON Prompt</h3>
+            <h3>Human Instruction</h3>
             <textarea
               rows={4}
               style={{ width: "100%", padding: 8 }}
