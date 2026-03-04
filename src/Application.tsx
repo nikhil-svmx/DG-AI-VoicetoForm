@@ -5,6 +5,7 @@ import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
 import "survey-core/survey-core.css";
 import { PROPMT_TEMPLATE_ANALYSIS, PROPMT_TEMPLATE_FINAL } from "./server/prompts";
+import { sixth } from "./configs/testForms";
 
 type Conflict = {
   value: any;
@@ -16,7 +17,7 @@ type Conflict = {
 export default function Application() {
 
   const [uploadedJson, setUploadedJson] = useState<any | null>(null);
-  const [pastedJson, setPastedJson] = useState("");
+  const [pastedJson, setPastedJson] = useState(JSON.stringify(sixth, null, 2));
   const [surveyJson, setSurveyJson] = useState<any | null>(null);
   const [survey, setSurvey] = useState<Model | null>(null);
 
@@ -298,7 +299,7 @@ export default function Application() {
               value={pass2Prompt}
               onChange={(e) => setPass2propmt(e.target.value)}
             />
-            <h3>Human Instruction</h3>
+            <h3>Final JSON Prompt</h3>
             <textarea
               rows={4}
               style={{ width: "100%", padding: 8 }}
