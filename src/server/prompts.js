@@ -182,6 +182,15 @@ export const PROPMT_TEMPLATE_FINAL = `
     - Use YYYY-MM-DD format
     - Compute relative dates using TODAY 
     - Do NOT guess ambiguous dates
+
+    paneldynamic:
+    {
+        "paneldynamic_question_number": [
+            {
+                "question_number": "Response",
+            }
+        ]
+    }
     
     =================================================
     CRITICAL PROHIBITIONS
