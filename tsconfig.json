@@ -22,5 +22,5 @@
   },
   "include": [
     "src"
-, "api/generate.js"  ]
+, "src/server/generate.js", "src/server/openAI.ts"  ]
 }

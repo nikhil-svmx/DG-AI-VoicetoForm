@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   const today = todayIST();
   try {
-    const { instruction, resolutions, surveyJson, conflicts, pass2Prompt } = req.body || {};
+    const { instruction, resolutions, surveyJson, conflicts, pass2Prompt, history = [] } = req.body || {};
 
     if (!surveyJson) return res.status(400).json({ error: "surveyJson required" });
     if (!instruction?.trim()) return res.status(400).json({ error: "instruction required" });
@@ -17,11 +17,11 @@ export default async function handler(req, res) {
       conflicts,
       Array.isArray(resolutions) ? resolutions : [],
       today,
-      pass2Prompt
+      pass2Prompt,
+      history
     );
 
     res.status(200).json(result);
-    console.log(result);
   } catch (err) {
     console.error("Generation failed:", err);
     res.status(500).json({ error: "Generation failed" });

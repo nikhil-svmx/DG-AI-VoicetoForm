@@ -1,5 +1,5 @@
 'use client';
-
+ 
 import { useEffect, useState } from "react";
 import { Model } from "survey-core";
 import { Survey } from "survey-react-ui";
@@ -13,28 +13,30 @@ type Conflict = {
   reason: string;
   candidates: { name: string; title: string }[];
 };
-
+ 
 export default function Application() {
-
+ 
   const [uploadedJson, setUploadedJson] = useState<any | null>(null);
   const [pastedJson, setPastedJson] = useState(JSON.stringify(sixth, null, 2));
   const [surveyJson, setSurveyJson] = useState<any | null>(null);
   const [survey, setSurvey] = useState<Model | null>(null);
-
-
+ 
+ 
   const [instruction, setInstruction] = useState("");
   const [loading, setLoading] = useState(false);
-
+ 
   const [isCompleted, setIsCompleted] = useState(false);
   const [results, setResults] = useState<any>(null);
-
+ 
   const [conflicts, setConflicts] = useState<Record<string, Conflict>>({});
   const [showModal, setShowModal] = useState(false);
   const [resolutions, setResolutions] = useState<Record<string, string>>({});
-
+ 
   const [pass1Prompt, setPass1propmt] = useState<string>(PROPMT_TEMPLATE_ANALYSIS);
   const [pass2Prompt, setPass2propmt] = useState<string>(PROPMT_TEMPLATE_FINAL);
 
+  const [history, setHistory] = useState<any>([]);
+ 
   const parseJsonSafely = (text: string) => {
     try {
       return JSON.parse(text);
@@ -42,30 +44,31 @@ export default function Application() {
       return null;
     }
   };
-
-
+ 
+ 
   const loadSurvey = () => {
     const candidate = uploadedJson ?? parseJsonSafely(pastedJson);
     if (!candidate) {
       alert("Invalid JSON. Please upload or paste valid JSON.");
       return;
     }
-
+ 
     try {
       const model = new Model(candidate);
       setSurvey(model);
       setSurveyJson(candidate);
+      console.log(model.toJSON());
       alert("Survey loaded!");
     } catch (err) {
       console.error(err);
       alert("Survey JSON structure invalid for SurveyJS.");
     }
   };
-
+ 
   const handleFileUpload: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-
+ 
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = String(ev.target?.result);
@@ -80,25 +83,25 @@ export default function Application() {
     };
     reader.readAsText(f);
   };
-
-
+ 
+ 
   useEffect(() => {
     if (!survey) return;
-
+ 
     const onComplete = (sender: Model) => {
       setIsCompleted(true);
       setResults(sender.data);
     };
-
+ 
     survey.onComplete.add(onComplete);
     return () => survey.onComplete.remove(onComplete);
   }, [survey]);
-
-
+ 
+ 
   const handleInstructionSubmit = async () => {
     if (!instruction.trim()) return;
     if (!surveyJson) return alert("Survey not loaded.");
-
+ 
     try {
       setLoading(true);
       const res = await fetch("/api/generate/analyze", {
@@ -107,12 +110,13 @@ export default function Application() {
         body: JSON.stringify({
           instruction,
           surveyJson,
-          pass1Prompt
+          pass1Prompt,
+          history
         })
       });
-
+ 
       if (!res.ok) throw new Error("Analyze failed");
-
+ 
       const { conflicts: found } = await res.json();
       if (found && Object.keys(found).length > 0) {
         setConflicts(found);
@@ -120,7 +124,7 @@ export default function Application() {
         setShowModal(true);
         return;
       }
-
+ 
       await generateWithResolutions([]);
     } catch (err) {
       console.error(err);
@@ -129,22 +133,22 @@ export default function Application() {
       setLoading(false);
     }
   };
-
-
+ 
+ 
   const onSaveResolutions = async () => {
     const payload = Object.entries(resolutions).map(([valueId, name]) => ({
       valueId,
       name,
       value: conflicts[valueId].value
     }));
-
+ 
     setShowModal(false);
     await generateWithResolutions(payload);
   };
-
+ 
   const generateWithResolutions = async (payload: any[]) => {
     if (!surveyJson) return alert("Survey not loaded.");
-
+ 
     try {
       setLoading(true);
       const res = await fetch("/api/generate", {
@@ -155,13 +159,21 @@ export default function Application() {
           resolutions: payload,
           surveyJson,
           conflicts,
-          pass2Prompt
+          pass2Prompt,
+          history
         })
       });
-
+ 
       if (!res.ok) throw new Error("Generation failed");
       const { answers } = await res.json();
       survey?.mergeData(answers);
+
+      setHistory((prev: any) =>[
+        ...prev,
+        {role: "user", content: instruction},
+        {role: "assistant", content: JSON.stringify(answers)}
+      ]);
+      console.log(history);
     } catch (err) {
       console.error(err);
       alert("Generation failed.");
@@ -169,8 +181,8 @@ export default function Application() {
       setLoading(false);
     }
   };
-
-
+ 
+ 
   const renderResultsTable = () => {
     if (!results) return null;
     return (
@@ -194,11 +206,11 @@ export default function Application() {
       </table>
     );
   };
-
+ 
   const renderConflictModal = () => {
     if (!showModal) return null;
     const ids = Object.keys(conflicts);
-
+ 
     return (
       <div
         style={{
@@ -213,7 +225,8 @@ export default function Application() {
       >
         <div style={{ background: "white", padding: 20, width: 700, borderRadius: 8 }}>
           <h3>Resolve Conflicts</h3>
-
+ 
+          {/* TO-DO: Conflict can occur when 2 or more fields can accept 1 value or  */}
           {ids.map((id) => {
             const c = conflicts[id];
             return (
@@ -239,7 +252,7 @@ export default function Application() {
               </div>
             );
           })}
-
+ 
           <button onClick={() => setShowModal(false)} style={{ marginRight: 10 }}>
             Cancel
           </button>
@@ -250,18 +263,18 @@ export default function Application() {
       </div>
     );
   };
-
-
+ 
+ 
   return (
     <div style={{ width: "90%", maxWidth: 900, margin: "auto", padding: 20 }}>
       
       {!survey && (
         <div style={{ border: "1px solid #ddd", padding: 16, borderRadius: 8 }}>
           <h2>Load Survey JSON</h2>
-
+ 
           <label>Upload JSON file:</label><br />
           <input type="file" accept="application/json" onChange={handleFileUpload} />
-
+ 
           <div style={{ marginTop: 16 }}>
             <label>Or paste JSON:</label>
             <textarea
@@ -272,7 +285,7 @@ export default function Application() {
               placeholder="Paste your survey JSON here..."
             />
           </div>
-
+ 
           <button
             style={{ marginTop: 16, padding: "8px 16px", background: "#4caf50", color: "white" }}
             onClick={loadSurvey}
@@ -281,7 +294,7 @@ export default function Application() {
           </button>
         </div>
       )}
-
+ 
       {survey && !isCompleted && (
         <>
           <div style={{ marginTop: 20 }}>
@@ -315,18 +328,18 @@ export default function Application() {
               {loading ? "Processing..." : "Submit Instruction"}
             </button>
           </div>
-
+ 
           <Survey model={survey} />
         </>
       )}
-
+ 
       {survey && isCompleted && (
         <div>
           <h2>Survey Completed</h2>
           {renderResultsTable()}
         </div>
       )}
-
+ 
       {renderConflictModal()}
     </div>
   );
