@@ -1,7 +1,7 @@
 import "dotenv/config";
-import { buildAnalysisPrompt, runner } from "../../src/server/localRunner.js";
+import { buildAnalysisPrompt} from "../../src/server/localRunner.js";
 import { todayIST } from "../../src/server/localRunner.js";
-import { callOpenAIChat } from "../../src/server/openAI.ts";
+import { callOpenAIChat } from "../../src/server/openAI.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });

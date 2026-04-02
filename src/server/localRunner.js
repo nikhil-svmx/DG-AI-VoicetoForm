@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { performance } from 'node:perf_hooks';
-import { callOpenAIChat } from './openAI.ts';
+import { callOpenAIChat } from './openAI.js';
 
 function timer(label) {
   const start = performance.now();

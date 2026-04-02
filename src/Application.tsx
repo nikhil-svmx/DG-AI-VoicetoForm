@@ -104,7 +104,7 @@ export default function Application() {
  
     try {
       setLoading(true);
-      const res = await fetch("/api/generate/analyze", {
+      const res = await fetch("http://localhost:3001/generate/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -151,7 +151,7 @@ export default function Application() {
  
     try {
       setLoading(true);
-      const res = await fetch("/api/generate", {
+      const res = await fetch("http://localhost:3001/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

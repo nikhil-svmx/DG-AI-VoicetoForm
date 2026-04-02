@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import "dotenv/config";
 import { runner, buildAnalysisPrompt} from "./localRunner.js";
-import { callOpenAIChat } from "./openAI.ts";
+import { callOpenAIChat } from "./openAI.js";
 import { todayIST } from "../../src/server/localRunner.js";
 
 const app = express();
